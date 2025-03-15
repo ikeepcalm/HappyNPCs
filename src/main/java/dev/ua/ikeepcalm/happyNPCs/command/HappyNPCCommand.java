@@ -4,6 +4,7 @@ import dev.rollczi.litecommands.annotations.argument.Arg;
 import dev.rollczi.litecommands.annotations.command.Command;
 import dev.rollczi.litecommands.annotations.context.Context;
 import dev.rollczi.litecommands.annotations.execute.Execute;
+import dev.rollczi.litecommands.annotations.join.Join;
 import dev.rollczi.litecommands.annotations.permission.Permission;
 import dev.ua.ikeepcalm.happyNPCs.HappyNPCs;
 import dev.ua.ikeepcalm.happyNPCs.npc.HappyNPC;
@@ -92,6 +93,39 @@ public class HappyNPCCommand {
                 .append(Component.text(id).color(NamedTextColor.GOLD))
                 .append(Component.text(" with mob type "))
                 .append(Component.text(mythicMobId).color(NamedTextColor.GOLD)));
+    }
+
+    @Execute(name = "rotate")
+    @Permission("happynpcs.move")
+    public void rotate(@Context Player player, @Arg("npcId") String id) {
+        HappyNPC npc = plugin.getNpcManager().rotateNPC(id, player.getLocation().getYaw(), player.getLocation().getPitch());
+
+        if (npc != null) {
+            player.sendMessage(Component.text("Rotated NPC ")
+                    .color(NamedTextColor.GREEN)
+                    .append(Component.text(id).color(NamedTextColor.GOLD))
+                    .append(Component.text(" to match your rotation.")));
+        } else {
+            player.sendMessage(Component.text("No NPC found with ID '" + id + "'.").color(NamedTextColor.RED));
+        }
+    }
+
+    @Execute(name = "rename")
+    @Permission("happynpcs.create")
+    public void rename(@Context CommandSender sender, @Arg("npcId") String id, @Join("name") String name) {
+        String npcName = name != null ? name.replace("_", " ") : "NPC";
+
+        HappyNPC npc = plugin.getNpcManager().renameNPC(id, npcName);
+
+        if (npc != null) {
+            sender.sendMessage(Component.text("Renamed NPC ")
+                    .color(NamedTextColor.GREEN)
+                    .append(Component.text(id).color(NamedTextColor.GOLD))
+                    .append(Component.text(" to "))
+                    .append(plugin.getMiniMessage().deserialize(npcName).color(NamedTextColor.GOLD)));
+        } else {
+            sender.sendMessage(Component.text("No NPC found with ID '" + id + "'.").color(NamedTextColor.RED));
+        }
     }
 
     @Execute(name = "remove")

@@ -134,45 +134,6 @@ public class DialogueManager {
         actions.put(dialogueId, dialogueActions);
     }
 
-    private void loadDialogueFromSection(String dialogueId, ConfigurationSection dialogueSection) {
-        if (dialogueSection == null) return;
-
-        Map<Integer, String> lines = new HashMap<>();
-        ConfigurationSection linesSection = dialogueSection.getConfigurationSection("lines");
-        if (linesSection != null) {
-            for (String lineKey : linesSection.getKeys(false)) {
-                try {
-                    int lineNum = Integer.parseInt(lineKey);
-                    String lineText = linesSection.getString(lineKey);
-                    lines.put(lineNum, lineText);
-                } catch (NumberFormatException e) {
-                    plugin.getLogger().warning("Invalid line number '" + lineKey + "' in dialogue " + dialogueId);
-                }
-            }
-        }
-
-        Map<Integer, String> dialogueActions = new HashMap<>();
-        ConfigurationSection actionsSection = dialogueSection.getConfigurationSection("actions");
-        if (actionsSection != null) {
-            for (String actionKey : actionsSection.getKeys(false)) {
-                try {
-                    int lineNum = Integer.parseInt(actionKey);
-                    String actionText = actionsSection.getString(actionKey);
-                    dialogueActions.put(lineNum, actionText);
-                } catch (NumberFormatException e) {
-                    plugin.getLogger().warning("Invalid action line number '" + actionKey + "' in dialogue " + dialogueId);
-                }
-            }
-        }
-
-        // Get restart line
-        int restartLine = dialogueSection.getInt("restart-line", 1);
-        restartLines.put(dialogueId, restartLine);
-
-        dialogues.put(dialogueId, lines);
-        actions.put(dialogueId, dialogueActions);
-    }
-
     private void createExampleDialogueFile() {
         File exampleFile = new File(dialoguesFolder, "example.yml");
         if (exampleFile.exists()) {
@@ -260,6 +221,16 @@ public class DialogueManager {
 
         executeLineAction(player, activeDialogue);
 
+        String dialogueId = activeDialogue.getDialogueId();
+        Map<Integer, String> lines = dialogues.get(dialogueId);
+
+        if (!lines.containsKey(activeDialogue.getCurrentLine() + 1)) {
+            activeDialogues.remove(player.getUniqueId());
+            plugin.getConfigManager().setPlayerDialogueProgress(player.getUniqueId().toString(), dialogueId, restartLines.getOrDefault(dialogueId, 1));
+            saveDialogueProgress();
+            return;
+        }
+
         activeDialogue.setCurrentLine(activeDialogue.getCurrentLine() + 1);
 
         plugin.getConfigManager().setPlayerDialogueProgress(
@@ -267,14 +238,6 @@ public class DialogueManager {
                 activeDialogue.getDialogueId(),
                 activeDialogue.getCurrentLine()
         );
-
-        String dialogueId = activeDialogue.getDialogueId();
-        Map<Integer, String> lines = dialogues.get(dialogueId);
-
-        if (!lines.containsKey(activeDialogue.getCurrentLine())) {
-            activeDialogues.remove(player.getUniqueId());
-            return;
-        }
 
         showDialogueLine(player, activeDialogue);
     }
@@ -289,6 +252,8 @@ public class DialogueManager {
         if (lineText == null) {
             plugin.getLogger().warning("Line " + currentLine + " not found in dialogue " + dialogueId);
             activeDialogues.remove(player.getUniqueId());
+            plugin.getConfigManager().setPlayerDialogueProgress(player.getUniqueId().toString(), dialogueId, 1);
+            saveDialogueProgress();
             return;
         }
 

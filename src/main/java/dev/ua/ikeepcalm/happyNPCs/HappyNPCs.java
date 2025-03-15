@@ -62,7 +62,7 @@ public class HappyNPCs extends JavaPlugin {
             public void run() {
                 reloadAll();
             }
-        }.runTaskLater(this, 20 * 1 * 30);
+        }.runTaskLater(this, 20 * 1 * 60);
 
         getLogger().info("HappyNPCs has been enabled!");
     }

@@ -10,10 +10,10 @@ import io.lumine.mythic.core.mobs.ActiveMob;
 import lombok.Getter;
 import lombok.Setter;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
-import org.bukkit.entity.Player;
 import org.bukkit.metadata.FixedMetadataValue;
 
 @Getter
@@ -57,7 +57,7 @@ public class HappyNPC {
         }
 
         if (entity != null) {
-            entity.setCustomName(name);
+            entity.customName(MiniMessage.miniMessage().deserialize(name));
             entity.setCustomNameVisible(true);
             entity.setPersistent(true);
             entity.setInvulnerable(isProtected);
@@ -76,6 +76,26 @@ public class HappyNPC {
 
         if (entity instanceof org.bukkit.entity.LivingEntity livingEntity) {
             livingEntity.setRemoveWhenFarAway(false);
+        }
+    }
+
+    public void setRotation(float yaw, float pitch) {
+        this.location.setYaw(yaw);
+        this.location.setPitch(pitch);
+
+        if (entity != null && !entity.isDead()) {
+            Location currentLoc = entity.getLocation();
+            currentLoc.setYaw(yaw);
+            currentLoc.setPitch(pitch);
+            entity.teleport(currentLoc);
+        }
+    }
+
+    public void setName(String name, Component displayName) {
+        this.name = name;
+
+        if (entity != null && !entity.isDead()) {
+            entity.customName(displayName);
         }
     }
 
@@ -130,7 +150,7 @@ public class HappyNPC {
         }
     }
 
-    public void showTo(Player player) {
+    public void showTo() {
         if (!spawned) {
             spawn();
         }
@@ -171,6 +191,7 @@ public class HappyNPC {
             spawnMythicMobEntity();
         }
     }
+
 
     @Override
     public boolean equals(Object obj) {

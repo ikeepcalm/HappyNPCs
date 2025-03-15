@@ -66,7 +66,7 @@ public class NPCInteractionListener implements Listener {
     
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
-        plugin.getNpcManager().showNPCsTo(event.getPlayer());
+        plugin.getNpcManager().showNPCsTo();
     }
     
     @EventHandler

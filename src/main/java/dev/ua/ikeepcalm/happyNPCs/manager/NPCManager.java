@@ -127,6 +127,29 @@ public class NPCManager {
         plugin.getConfigManager().saveNPCsConfig();
     }
 
+    public HappyNPC rotateNPC(String id, float yaw, float pitch) {
+        HappyNPC npc = npcs.get(id);
+        if (npc == null) {
+            return null;
+        }
+
+        npc.setRotation(yaw, pitch);
+        saveNPCs();
+        return npc;
+    }
+
+    public HappyNPC renameNPC(String id, String newName) {
+        HappyNPC npc = npcs.get(id);
+        if (npc == null) {
+            return null;
+        }
+
+        Component displayName = HappyNPCs.getInstance().getMiniMessage().deserialize(newName);
+        npc.setName(newName, displayName);
+        saveNPCs();
+        return npc;
+    }
+
     public HappyNPC createNPC(String id, Location location, String name, Component displayName) {
         if (npcs.containsKey(id)) {
             return null;
@@ -246,10 +269,10 @@ public class NPCManager {
         entityIdToNPC.put(newEntityId, npc);
     }
 
-    public void showNPCsTo(Player player) {
+    public void showNPCsTo() {
         for (HappyNPC npc : npcs.values()) {
             if (npc.isSpawned()) {
-                npc.showTo(player);
+                npc.showTo();
             }
         }
     }
