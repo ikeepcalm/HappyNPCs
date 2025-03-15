@@ -1,0 +1,7 @@
+name: HappyNPCs
+version: 1.0.0
+main: dev.ua.ikeepcalm.happyNPCs.HappyNPCs
+api-version: 1.21
+description: A plugin for creating and managing NPCs with dialogues
+author: ikeepcalm
+softdepend: [ MythicMobs, ModelEngine ]

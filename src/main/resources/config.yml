@@ -1,0 +1,20 @@
+# HappyNPCs Configuration
+
+# Whether NPCs should be protected from damage by default
+npc-protection: true
+
+# Key to press to advance dialogue
+# Supported keys: F (more may be added in the future)
+dialogue-advance-key: "F"
+
+# Sound to play when typing dialogue
+# Use any Minecraft sound name
+typing-sound: "ui.button.click"
+
+# Speed of typing animation (ticks between characters)
+# Lower values = faster typing
+# Default: 2 (10 characters per second)
+typing-speed: 1
+
+# Debug mode
+debug: false
