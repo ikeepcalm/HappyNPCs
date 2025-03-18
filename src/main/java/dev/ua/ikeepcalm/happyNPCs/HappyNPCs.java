@@ -4,6 +4,7 @@ import dev.ua.ikeepcalm.happyNPCs.command.CommandManager;
 import dev.ua.ikeepcalm.happyNPCs.config.ConfigManager;
 import dev.ua.ikeepcalm.happyNPCs.listener.KeyPressListener;
 import dev.ua.ikeepcalm.happyNPCs.listener.NPCInteractionListener;
+import dev.ua.ikeepcalm.happyNPCs.listener.NPCMovementProtectionListener;
 import dev.ua.ikeepcalm.happyNPCs.listener.NPCProtectionListener;
 import dev.ua.ikeepcalm.happyNPCs.manager.DialogueManager;
 import dev.ua.ikeepcalm.happyNPCs.manager.NPCManager;
@@ -49,6 +50,7 @@ public class HappyNPCs extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new NPCInteractionListener(this), this);
         getServer().getPluginManager().registerEvents(new NPCProtectionListener(this), this);
         getServer().getPluginManager().registerEvents(new KeyPressListener(this), this);
+        getServer().getPluginManager().registerEvents(new NPCMovementProtectionListener(this), this);
 
         commandManager.registerCommands();
 
