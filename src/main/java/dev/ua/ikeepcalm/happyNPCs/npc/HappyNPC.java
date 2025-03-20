@@ -15,6 +15,7 @@ import org.bukkit.Location;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.metadata.FixedMetadataValue;
+import org.bukkit.scheduler.BukkitRunnable;
 
 @Getter
 @Setter
@@ -36,6 +37,14 @@ public class HappyNPC {
         this.location = location;
         this.name = name;
         this.displayName = displayName;
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                if (entity != null && !entity.isDead() && !entity.getLocation().equals(location)) {
+                    entity.teleport(location);
+                }
+            }
+        }.runTaskTimer(HappyNPCs.getInstance(), 0L, 500L);
     }
 
     public void spawn() {
@@ -145,7 +154,10 @@ public class HappyNPC {
 
     public void teleport(Location location) {
         this.location = location;
-        if (entity != null && !entity.isDead()) {
+        if (entity != null) {
+            if (entity.isDead()) {
+                spawn();
+            }
             entity.teleport(location);
         }
     }
