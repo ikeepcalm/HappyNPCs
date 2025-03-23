@@ -10,7 +10,6 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
-import org.bukkit.entity.Player;
 
 import java.util.*;
 import java.util.logging.Level;
@@ -265,8 +264,12 @@ public class NPCManager {
     }
 
     public void updateNPCEntity(UUID oldEntityId, UUID newEntityId, HappyNPC npc) {
-        entityIdToNPC.remove(oldEntityId);
-        entityIdToNPC.put(newEntityId, npc);
+        if (oldEntityId != null) {
+            entityIdToNPC.remove(oldEntityId);
+        }
+        if (newEntityId != null) {
+            entityIdToNPC.put(newEntityId, npc);
+        }
     }
 
     public void showNPCsTo() {

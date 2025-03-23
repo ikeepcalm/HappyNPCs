@@ -48,6 +48,18 @@ public class HappyNPC {
     }
 
     public void spawn() {
+        if (location.getWorld() != null) {
+            for (Entity existingEntity : location.getWorld().getNearbyEntities(location, 20, 20, 20)) {
+                if (existingEntity.hasMetadata("HappyNPC") &&
+                        id.equals(existingEntity.getMetadata("HappyNPC").getFirst().asString())) {
+                    entity = existingEntity;
+                    HappyNPCs.getInstance().getNpcManager().updateNPCEntity(null, entity.getUniqueId(), this);
+                    spawned = true;
+                    return;
+                }
+            }
+        }
+
         if (spawned && entity != null && !entity.isDead()) {
             return;
         }
@@ -154,6 +166,14 @@ public class HappyNPC {
 
     public void teleport(Location location) {
         this.location = location;
+
+        if (entity != null && !mythicMobId.isEmpty() && HappyNPCs.getInstance().isMythicMobsAvailable()) {
+            despawn();
+            this.location = location;
+            spawn();
+            return;
+        }
+
         if (entity != null) {
             if (entity.isDead()) {
                 spawn();

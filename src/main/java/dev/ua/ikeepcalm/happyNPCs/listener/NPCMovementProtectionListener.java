@@ -2,6 +2,7 @@ package dev.ua.ikeepcalm.happyNPCs.listener;
 
 import dev.ua.ikeepcalm.happyNPCs.HappyNPCs;
 import dev.ua.ikeepcalm.happyNPCs.npc.HappyNPC;
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Entity;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -22,6 +23,35 @@ public class NPCMovementProtectionListener implements Listener {
     
     public NPCMovementProtectionListener(HappyNPCs plugin) {
         this.plugin = plugin;
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onEntityMoveInLiquid(org.bukkit.event.player.PlayerMoveEvent event) {
+        if (event.getFrom().getBlock().isLiquid() || event.getTo().getBlock().isLiquid()) {
+            for (Entity entity : event.getPlayer().getNearbyEntities(5, 5, 5)) {
+                if (plugin.getNpcManager().isNPC(entity) &&
+                        (entity.getLocation().getBlock().isLiquid() ||
+                                entity.getLocation().add(0,-0.1,0).getBlock().isLiquid())) {
+
+                    HappyNPC npc = plugin.getNpcManager().getNPCByEntity(entity);
+                    if (npc != null && npc.isProtected()) {
+                        Bukkit.getScheduler().runTask(plugin, () -> entity.teleport(npc.getLocation()));
+                    }
+                }
+            }
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onEntityMove(org.bukkit.event.entity.EntityChangeBlockEvent event) {
+        Entity entity = event.getEntity();
+        if (plugin.getNpcManager().isNPC(entity)) {
+            HappyNPC npc = plugin.getNpcManager().getNPCByEntity(entity);
+            if (npc != null && npc.isProtected()) {
+                event.setCancelled(true);
+                entity.teleport(npc.getLocation());
+            }
+        }
     }
     
     @EventHandler(priority = EventPriority.HIGHEST)
