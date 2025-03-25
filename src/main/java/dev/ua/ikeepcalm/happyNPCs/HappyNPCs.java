@@ -62,9 +62,11 @@ public class HappyNPCs extends JavaPlugin {
         new BukkitRunnable() {
             @Override
             public void run() {
-                reloadAll();
+                npcManager.getAllNPCs().forEach(npc -> {
+                    npcManager.showNPC(npc.getId());
+                });
             }
-        }.runTaskLater(this, 20 * 1 * 60);
+        }.runTaskTimer(this, 20 * 60, 20 * 60 * 5);
 
         getLogger().info("HappyNPCs has been enabled!");
     }
@@ -73,14 +75,11 @@ public class HappyNPCs extends JavaPlugin {
     public void onDisable() {
         saveData();
 
-        npcManager.removeAllNPCs();
-
         if (fileWatcher != null) {
             fileWatcher.stopWatching();
         }
 
         commandManager.unregisterCommands();
-
         getLogger().info("HappyNPCs has been disabled!");
     }
 

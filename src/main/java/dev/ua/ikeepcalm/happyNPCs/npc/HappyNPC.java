@@ -12,9 +12,12 @@ import lombok.Setter;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Location;
+import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.metadata.FixedMetadataValue;
+import org.bukkit.persistence.PersistentDataContainer;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.scheduler.BukkitRunnable;
 
 @Getter
@@ -50,12 +53,14 @@ public class HappyNPC {
     public void spawn() {
         if (location.getWorld() != null) {
             for (Entity existingEntity : location.getWorld().getNearbyEntities(location, 20, 20, 20)) {
-                if (existingEntity.hasMetadata("HappyNPC") &&
-                        id.equals(existingEntity.getMetadata("HappyNPC").getFirst().asString())) {
-                    entity = existingEntity;
-                    HappyNPCs.getInstance().getNpcManager().updateNPCEntity(null, entity.getUniqueId(), this);
-                    spawned = true;
-                    return;
+                PersistentDataContainer container = existingEntity.getPersistentDataContainer();
+                if (container.has(new NamespacedKey(HappyNPCs.getInstance(), "HappyNPC"))) {
+                    String id = container.get(new NamespacedKey(HappyNPCs.getInstance(), "HappyNPC"), PersistentDataType.STRING);
+                    if (id != null && id.equals(this.id)) {
+                        spawned = true;
+                        entity = existingEntity;
+                        HappyNPCs.getInstance().getNpcManager().updateNPCEntity(null, entity.getUniqueId(), this);
+                    }
                 }
             }
         }
@@ -82,10 +87,8 @@ public class HappyNPC {
             entity.setCustomNameVisible(true);
             entity.setPersistent(true);
             entity.setInvulnerable(isProtected);
-            entity.setMetadata("HappyNPC", new FixedMetadataValue(plugin, id));
-
+            entity.getPersistentDataContainer().set(new NamespacedKey(HappyNPCs.getInstance(), "HappyNPC"), PersistentDataType.STRING, id);
             plugin.getNpcManager().updateNPCEntity(null, entity.getUniqueId(), this);
-
             spawned = true;
         }
     }
@@ -157,6 +160,7 @@ public class HappyNPC {
             entity.remove();
             entity = null;
         }
+
         spawned = false;
     }
 
