@@ -11,6 +11,7 @@ import lombok.Getter;
 import lombok.Setter;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Entity;
@@ -19,6 +20,9 @@ import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.scheduler.BukkitRunnable;
+
+import java.util.Optional;
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -34,6 +38,10 @@ public class HappyNPC {
     private String dialogueId = "";
     private boolean spawned = false;
     private String mythicMobId = "";
+
+    @Getter
+    @Setter
+    private UUID entityUUID;
 
     public HappyNPC(String id, Location location, String name, Component displayName) {
         this.id = id;
@@ -51,22 +59,26 @@ public class HappyNPC {
     }
 
     public void spawn() {
+        if (entityUUID != null) {
+            Entity existingEntity = findEntityByUUID(entityUUID);
+            if (existingEntity != null && !existingEntity.isDead()) {
+                entity = existingEntity;
+                spawned = true;
+                HappyNPCs.getInstance().getNpcManager().updateNPCEntity(null, entity.getUniqueId(), this);
+                return;
+            }
+        }
+
         if (location.getWorld() != null) {
             for (Entity existingEntity : location.getWorld().getNearbyEntities(location, 20, 20, 20)) {
                 PersistentDataContainer container = existingEntity.getPersistentDataContainer();
                 if (container.has(new NamespacedKey(HappyNPCs.getInstance(), "HappyNPC"))) {
-                    String id = container.get(new NamespacedKey(HappyNPCs.getInstance(), "HappyNPC"), PersistentDataType.STRING);
-                    if (id != null && id.equals(this.id)) {
-                        spawned = true;
-                        entity = existingEntity;
-                        HappyNPCs.getInstance().getNpcManager().updateNPCEntity(null, entity.getUniqueId(), this);
+                    String npcId = container.get(new NamespacedKey(HappyNPCs.getInstance(), "HappyNPC"), PersistentDataType.STRING);
+                    if (npcId != null && npcId.equals(this.id)) {
+                        existingEntity.remove();
                     }
                 }
             }
-        }
-
-        if (spawned && entity != null && !entity.isDead()) {
-            return;
         }
 
         if (entity != null) {
@@ -87,10 +99,24 @@ public class HappyNPC {
             entity.setCustomNameVisible(true);
             entity.setPersistent(true);
             entity.setInvulnerable(isProtected);
-            entity.getPersistentDataContainer().set(new NamespacedKey(HappyNPCs.getInstance(), "HappyNPC"), PersistentDataType.STRING, id);
-            plugin.getNpcManager().updateNPCEntity(null, entity.getUniqueId(), this);
+            PersistentDataContainer container = entity.getPersistentDataContainer();
+            container.set(new NamespacedKey(plugin, "HappyNPC"), PersistentDataType.STRING, id);
+
+            entityUUID = entity.getUniqueId();
+            plugin.getNpcManager().updateNPCEntity(null, entityUUID, this);
             spawned = true;
         }
+    }
+
+    private Entity findEntityByUUID(UUID uuid) {
+        for (org.bukkit.World world : Bukkit.getWorlds()) {
+            for (Entity entity : world.getEntities()) {
+                if (entity.getUniqueId().equals(uuid)) {
+                    return entity;
+                }
+            }
+        }
+        return null;
     }
 
     private void spawnVanillaEntity() {
@@ -124,34 +150,63 @@ public class HappyNPC {
     }
 
     private void spawnMythicMobEntity() {
-        HappyNPCs.getInstance().getLogger().info("Attempting to spawn MythicMob entity with ID: " + mythicMobId);
-        try {
-            MythicPlugin mythicProvider = MythicProvider.get();
-            MythicMob mythicMob = mythicProvider.getMobManager().getMythicMob(mythicMobId).orElse(null);
+        HappyNPCs plugin = HappyNPCs.getInstance();
+        plugin.getLogger().info("Spawning MythicMob entity: " + mythicMobId + " for NPC: " + id);
 
-            if (mythicMob == null) {
-                HappyNPCs.getInstance().getLogger().warning("MythicMob with ID '" + mythicMobId + "' not found. Spawning default entity.");
-                entity = location.getWorld().spawnEntity(location, EntityType.ZOMBIE);
+        if (!Bukkit.isPrimaryThread()) {
+            Bukkit.getScheduler().runTask(plugin, this::spawnMythicMobEntity);
+            return;
+        }
+
+        try {
+            if (!plugin.isMythicMobsAvailable() || Bukkit.getPluginManager().getPlugin("MythicMobs") == null) {
+                plugin.getLogger().warning("MythicMobs not available, using default entity");
+                spawnVanillaEntity();
                 return;
             }
 
-            AbstractLocation abstractLocation = new AbstractLocation(location.getWorld().getName(), location.getX(), location.getY(), location.getZ());
-            ActiveMob activeMob = mythicMob.spawn(abstractLocation, 1, SpawnReason.OTHER);
-            activeMob.setDisplayName(name);
+            MythicPlugin mythicProvider = MythicProvider.get();
+            if (mythicProvider == null || mythicProvider.getMobManager() == null) {
+                plugin.getLogger().warning("MythicMobs API unavailable, using default entity");
+                spawnVanillaEntity();
+                return;
+            }
+
+            Optional<MythicMob> mythicMobOpt = mythicProvider.getMobManager().getMythicMob(mythicMobId);
+            if (mythicMobOpt.isEmpty()) {
+                plugin.getLogger().warning("MythicMob type '" + mythicMobId + "' not found");
+                spawnVanillaEntity();
+                return;
+            }
+
+            AbstractLocation abstractLocation = new AbstractLocation(
+                    location.getWorld().getName(),
+                    location.getX(),
+                    location.getY(),
+                    location.getZ()
+            );
+
+            ActiveMob activeMob = mythicMobOpt.get().spawn(abstractLocation, 1, SpawnReason.OTHER);
+
+            if (activeMob == null || activeMob.getEntity() == null) {
+                plugin.getLogger().warning("Failed to spawn MythicMob (null result)");
+                spawnVanillaEntity();
+                return;
+            }
 
             entity = activeMob.getEntity().getBukkitEntity();
 
-            if (entity instanceof org.bukkit.entity.LivingEntity) {
-                if (entity instanceof org.bukkit.entity.Mob) {
-                    ((org.bukkit.entity.Mob) entity).setRemoveWhenFarAway(false);
-                }
+            entity.setMetadata("HappyNPC_MythicMob", new FixedMetadataValue(plugin, activeMob));
+
+            if (entity instanceof org.bukkit.entity.Mob) {
+                ((org.bukkit.entity.Mob) entity).setAI(false);
             }
 
-            entity.setMetadata("HappyNPC_MythicMob", new FixedMetadataValue(
-                    HappyNPCs.getInstance(), activeMob));
+            plugin.getLogger().info("Successfully spawned MythicMob for NPC: " + id);
+
         } catch (Exception e) {
-            HappyNPCs.getInstance().getLogger().log(java.util.logging.Level.SEVERE, "Error spawning MythicMob", e);
-            entity = location.getWorld().spawnEntity(location, EntityType.ZOMBIE);
+            plugin.getLogger().log(java.util.logging.Level.SEVERE, "Error spawning MythicMob: " + e.getMessage(), e);
+            spawnVanillaEntity();
         }
     }
 

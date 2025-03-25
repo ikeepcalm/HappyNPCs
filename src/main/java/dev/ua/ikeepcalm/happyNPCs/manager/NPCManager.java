@@ -6,10 +6,13 @@ import dev.ua.ikeepcalm.happyNPCs.npc.HappyNPC;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.NamespacedKey;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
+import org.bukkit.persistence.PersistentDataContainer;
+import org.bukkit.persistence.PersistentDataType;
 
 import java.util.*;
 import java.util.logging.Level;
@@ -41,6 +44,7 @@ public class NPCManager {
                 ConfigurationSection npcSection = npcsSection.getConfigurationSection(npcId);
                 if (npcSection == null) continue;
 
+                // Load location
                 String worldName = npcSection.getString("location.world");
                 double x = npcSection.getDouble("location.x");
                 double y = npcSection.getDouble("location.y");
@@ -56,19 +60,30 @@ public class NPCManager {
                 Location location = new Location(Bukkit.getWorld(worldName), x, y, z, yaw, pitch);
 
                 String name = npcSection.getString("name", "NPC");
-                String entityType = npcSection.getString("entityType", "PLAYER");
+                String entityType = npcSection.getString("entityType", "VILLAGER");
                 boolean protected_ = npcSection.getBoolean("protected", true);
                 String dialogueId = npcSection.getString("dialogueId", "");
                 String mythicMobId = npcSection.getString("mythicMobId", "");
 
+                // Load entity UUID if saved
+                UUID entityUUID = null;
+                if (npcSection.contains("entityUUID")) {
+                    try {
+                        entityUUID = UUID.fromString(npcSection.getString("entityUUID"));
+                    } catch (IllegalArgumentException e) {
+                        plugin.getLogger().warning("Invalid UUID format for NPC " + npcId);
+                    }
+                }
+
                 HappyNPC npc = new HappyNPC(npcId, location, name, plugin.getMiniMessage().deserialize(name));
                 npc.setProtected(protected_);
                 npc.setDialogueId(dialogueId);
+                npc.setEntityUUID(entityUUID);
 
                 try {
                     npc.setEntityType(EntityType.valueOf(entityType));
                 } catch (IllegalArgumentException e) {
-                    plugin.getLogger().warning("Invalid entity type '" + entityType + "' for NPC " + npcId + ". Using PLAYER.");
+                    plugin.getLogger().warning("Invalid entity type '" + entityType + "' for NPC " + npcId + ". Using VILLAGER.");
                     npc.setEntityType(EntityType.VILLAGER);
                 }
 
@@ -77,14 +92,11 @@ public class NPCManager {
                 }
 
                 if (npcSection.getBoolean("spawned", true)) {
-                    npc.spawn();
+                    // Use sync task to spawn NPCs to ensure they're on main thread
+                    Bukkit.getScheduler().runTask(plugin, npc::spawn);
                 }
 
                 npcs.put(npcId, npc);
-                if (npc.getEntity() != null) {
-                    entityIdToNPC.put(npc.getEntity().getUniqueId(), npc);
-                }
-
                 plugin.getLogger().info("Loaded NPC " + npcId);
             } catch (Exception e) {
                 plugin.getLogger().log(Level.SEVERE, "Failed to load NPC " + npcId, e);
@@ -92,6 +104,9 @@ public class NPCManager {
         }
 
         plugin.getLogger().info("Loaded " + npcs.size() + " NPCs");
+
+        // Cleanup any orphaned NPCs
+        cleanupOrphanedNPCs();
     }
 
     public void saveNPCs() {
@@ -118,12 +133,43 @@ public class NPCManager {
             npcSection.set("dialogueId", npc.getDialogueId());
             npcSection.set("spawned", npc.isSpawned());
 
+            // Save entity UUID
+            if (npc.getEntityUUID() != null) {
+                npcSection.set("entityUUID", npc.getEntityUUID().toString());
+            }
+
             if (npc.getMythicMobId() != null && !npc.getMythicMobId().isEmpty()) {
                 npcSection.set("mythicMobId", npc.getMythicMobId());
             }
         }
 
         plugin.getConfigManager().saveNPCsConfig();
+    }
+
+    // Method to clean up orphaned NPCs
+    private void cleanupOrphanedNPCs() {
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            for (org.bukkit.World world : Bukkit.getWorlds()) {
+                for (Entity entity : world.getEntities()) {
+                    PersistentDataContainer container = entity.getPersistentDataContainer();
+                    if (container.has(new NamespacedKey(plugin, "HappyNPC"))) {
+                        String npcId = container.get(new NamespacedKey(plugin, "HappyNPC"), PersistentDataType.STRING);
+                        HappyNPC npc = npcs.get(npcId);
+
+                        // If NPC exists and this isn't its current entity, it's a duplicate
+                        if (npc != null) {
+                            if (npc.getEntity() != null && !npc.getEntity().equals(entity)) {
+                                plugin.getLogger().info("Removing duplicate NPC entity for " + npcId);
+                                entity.remove();
+                            }
+                        } else {
+                            plugin.getLogger().info("Removing orphaned NPC entity: " + npcId);
+                            entity.remove();
+                        }
+                    }
+                }
+            }
+        });
     }
 
     public HappyNPC rotateNPC(String id, float yaw, float pitch) {

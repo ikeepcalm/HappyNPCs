@@ -2,18 +2,17 @@ package dev.ua.ikeepcalm.happyNPCs;
 
 import dev.ua.ikeepcalm.happyNPCs.command.CommandManager;
 import dev.ua.ikeepcalm.happyNPCs.config.ConfigManager;
-import dev.ua.ikeepcalm.happyNPCs.listener.KeyPressListener;
-import dev.ua.ikeepcalm.happyNPCs.listener.NPCInteractionListener;
-import dev.ua.ikeepcalm.happyNPCs.listener.NPCMovementProtectionListener;
-import dev.ua.ikeepcalm.happyNPCs.listener.NPCProtectionListener;
+import dev.ua.ikeepcalm.happyNPCs.listener.*;
 import dev.ua.ikeepcalm.happyNPCs.manager.DialogueManager;
 import dev.ua.ikeepcalm.happyNPCs.manager.NPCManager;
+import dev.ua.ikeepcalm.happyNPCs.npc.HappyNPC;
 import dev.ua.ikeepcalm.happyNPCs.util.FileWatcher;
 import lombok.Getter;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Bukkit;
+import org.bukkit.entity.Entity;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
 
@@ -51,9 +50,9 @@ public class HappyNPCs extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new NPCProtectionListener(this), this);
         getServer().getPluginManager().registerEvents(new KeyPressListener(this), this);
         getServer().getPluginManager().registerEvents(new NPCMovementProtectionListener(this), this);
+        getServer().getPluginManager().registerEvents(new NPCCleanupListener(this), this);
 
         commandManager.registerCommands();
-
         fileWatcher = new FileWatcher(this);
         fileWatcher.startWatching();
 
@@ -62,13 +61,28 @@ public class HappyNPCs extends JavaPlugin {
         new BukkitRunnable() {
             @Override
             public void run() {
-                npcManager.getAllNPCs().forEach(npc -> {
-                    npcManager.showNPC(npc.getId());
-                });
+                verifyAllNPCs();
             }
         }.runTaskTimer(this, 20 * 60, 20 * 60 * 5);
 
         getLogger().info("HappyNPCs has been enabled!");
+    }
+
+    public void verifyAllNPCs() {
+        getLogger().info("Verifying NPC entities...");
+        for (HappyNPC npc : npcManager.getAllNPCs()) {
+            if (!npc.isSpawned() || npc.getEntity() == null || npc.getEntity().isDead()) {
+                getLogger().info("Respawning NPC: " + npc.getId());
+                getServer().getScheduler().runTask(this, npc::spawn);
+            } else if (!npc.getMythicMobId().isEmpty() && mythicMobsAvailable) {
+                Entity entity = npc.getEntity();
+                if (!entity.hasMetadata("HappyNPC_MythicMob") || entity.getMetadata("HappyNPC_MythicMob").isEmpty()) {
+                    getLogger().info("Respawning NPC with missing MythicMob: " + npc.getId());
+                    npc.despawn();
+                    getServer().getScheduler().runTaskLater(this, npc::spawn, 5L);
+                }
+            }
+        }
     }
 
     @Override
