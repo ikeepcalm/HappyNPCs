@@ -51,6 +51,7 @@ public class HappyNPCs extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new KeyPressListener(this), this);
         getServer().getPluginManager().registerEvents(new NPCMovementProtectionListener(this), this);
         getServer().getPluginManager().registerEvents(new NPCCleanupListener(this), this);
+        getServer().getPluginManager().registerEvents(new MythicMobsInitListener(this), this);
 
         commandManager.registerCommands();
         fileWatcher = new FileWatcher(this);
