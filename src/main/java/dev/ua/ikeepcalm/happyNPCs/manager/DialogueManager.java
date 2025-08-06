@@ -1,9 +1,11 @@
 package dev.ua.ikeepcalm.happyNPCs.manager;
 
 import dev.ua.ikeepcalm.happyNPCs.HappyNPCs;
+import dev.ua.ikeepcalm.happyNPCs.locale.LocaleManager;
 import dev.ua.ikeepcalm.happyNPCs.npc.HappyNPC;
 import lombok.Getter;
 import lombok.Setter;
+import net.kyori.adventure.bossbar.BossBar;
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.sound.Sound;
 import net.kyori.adventure.text.Component;
@@ -29,11 +31,13 @@ import java.util.logging.Level;
 public class DialogueManager {
 
     private final HappyNPCs plugin;
-    private final Map<String, Map<Integer, String>> dialogues = new HashMap<>();
+    private final Map<String, Map<Integer, LocalizedLine>> dialogues = new HashMap<>();
     private final Map<String, Map<Integer, String>> actions = new HashMap<>();
     private final Map<String, Integer> restartLines = new HashMap<>();
     private final Map<UUID, ActiveDialogue> activeDialogues = new ConcurrentHashMap<>();
     private final Map<UUID, BukkitTask> typingTasks = new ConcurrentHashMap<>();
+    private final Map<UUID, BossBar> instructionBossBars = new ConcurrentHashMap<>();
+    private final Map<UUID, Long> lastInteractionTime = new ConcurrentHashMap<>();
     private final File dialoguesFolder;
 
     public DialogueManager(HappyNPCs plugin) {
@@ -91,14 +95,12 @@ public class DialogueManager {
     }
 
     private void loadDialogueFromFile(String dialogueId, FileConfiguration config) {
-        Map<Integer, String> lines = new HashMap<>();
+        Map<Integer, LocalizedLine> lines = new HashMap<>();
         Map<Integer, String> dialogueActions = new HashMap<>();
 
-        // Get restart line
         int restartLine = config.getInt("restart-line", 1);
         restartLines.put(dialogueId, restartLine);
 
-        // Get lines
         ConfigurationSection linesSection = config.getConfigurationSection("lines");
         if (linesSection == null) {
             plugin.getLogger().warning("No lines section found in dialogue " + dialogueId);
@@ -108,14 +110,28 @@ public class DialogueManager {
         for (String lineKey : linesSection.getKeys(false)) {
             try {
                 int lineNum = Integer.parseInt(lineKey);
-                String lineText = linesSection.getString(lineKey);
-                lines.put(lineNum, lineText);
+                ConfigurationSection lineSection = linesSection.getConfigurationSection(lineKey);
+                
+                if (lineSection != null) {
+                    String ukText = lineSection.getString("uk");
+                    String enText = lineSection.getString("en");
+                    
+                    if (ukText != null && enText != null) {
+                        lines.put(lineNum, new LocalizedLine(ukText, enText));
+                    } else {
+                        plugin.getLogger().warning("Missing uk or en text for line " + lineKey + " in dialogue " + dialogueId);
+                    }
+                } else {
+                    String lineText = linesSection.getString(lineKey);
+                    if (lineText != null) {
+                        lines.put(lineNum, new LocalizedLine(lineText, lineText));
+                    }
+                }
             } catch (NumberFormatException e) {
                 plugin.getLogger().warning("Invalid line number '" + lineKey + "' in dialogue " + dialogueId);
             }
         }
 
-        // Get actions
         ConfigurationSection actionsSection = config.getConfigurationSection("actions");
         if (actionsSection != null) {
             for (String actionKey : actionsSection.getKeys(false)) {
@@ -129,7 +145,6 @@ public class DialogueManager {
             }
         }
 
-        // Store dialogue
         dialogues.put(dialogueId, lines);
         actions.put(dialogueId, dialogueActions);
     }
@@ -146,9 +161,18 @@ public class DialogueManager {
             config.set("restart-line", 1);
 
             ConfigurationSection linesSection = config.createSection("lines");
-            linesSection.set("1", "<gold>Hello there!</gold>");
-            linesSection.set("2", "<yellow>I'm an example NPC.</yellow>");
-            linesSection.set("3", "<green>Press F to continue the dialogue.</green>");
+            
+            ConfigurationSection line1Section = linesSection.createSection("1");
+            line1Section.set("uk", "<gold>Привіт!</gold>");
+            line1Section.set("en", "<gold>Hello there!</gold>");
+            
+            ConfigurationSection line2Section = linesSection.createSection("2");
+            line2Section.set("uk", "<yellow>Я приклад НПС.</yellow>");
+            line2Section.set("en", "<yellow>I'm an example NPC.</yellow>");
+            
+            ConfigurationSection line3Section = linesSection.createSection("3");
+            line3Section.set("uk", "<green>Натисни F щоб продовжити діалог.</green>");
+            line3Section.set("en", "<green>Press F to continue the dialogue.</green>");
 
             ConfigurationSection actionsSection = config.createSection("actions");
             actionsSection.set("3", "command:tell %player% Dialogue finished!");
@@ -170,7 +194,7 @@ public class DialogueManager {
             return;
         }
 
-        Map<Integer, String> lines = dialogues.get(dialogueId);
+        Map<Integer, LocalizedLine> lines = dialogues.get(dialogueId);
         if (lines == null || lines.isEmpty()) {
             plugin.getLogger().warning("Dialogue " + dialogueId + " not found or empty for NPC " + npc.getId());
             return;
@@ -191,6 +215,14 @@ public class DialogueManager {
         ActiveDialogue activeDialogue = new ActiveDialogue(dialogueId, npc, startLine);
         activeDialogues.put(player.getUniqueId(), activeDialogue);
 
+        // Show instruction bossbar if it's been more than 30 seconds since last interaction
+        long currentTime = System.currentTimeMillis();
+        long lastInteraction = lastInteractionTime.getOrDefault(player.getUniqueId(), 0L);
+        if (currentTime - lastInteraction > 30000) { // 30 seconds
+            showInstructionBossBar(player);
+        }
+        lastInteractionTime.put(player.getUniqueId(), currentTime);
+
         showDialogueLine(player, activeDialogue);
 
     }
@@ -206,12 +238,19 @@ public class DialogueManager {
             typingTask.cancel();
         }
 
+        BossBar instructionBar = instructionBossBars.remove(player.getUniqueId());
+        if (instructionBar != null) {
+            player.hideBossBar(instructionBar);
+        }
+
         if (!activeDialogue.isLineCompleted()) {
             String dialogueId = activeDialogue.getDialogueId();
-            Map<Integer, String> lines = dialogues.get(dialogueId);
-            String fullLine = lines.get(activeDialogue.getCurrentLine());
+            Map<Integer, LocalizedLine> lines = dialogues.get(dialogueId);
+            LocalizedLine localizedLine = lines.get(activeDialogue.getCurrentLine());
 
-            if (fullLine != null) {
+            if (localizedLine != null) {
+                LocaleManager.SupportedLocale playerLocale = plugin.getLocaleManager().getPlayerLocale(player);
+                String fullLine = localizedLine.getText(playerLocale);
                 Component message = plugin.getMiniMessage().deserialize(fullLine);
                 player.sendActionBar(message);
                 activeDialogue.setLineCompleted(true);
@@ -222,7 +261,7 @@ public class DialogueManager {
         executeLineAction(player, activeDialogue);
 
         String dialogueId = activeDialogue.getDialogueId();
-        Map<Integer, String> lines = dialogues.get(dialogueId);
+        Map<Integer, LocalizedLine> lines = dialogues.get(dialogueId);
 
         if (!lines.containsKey(activeDialogue.getCurrentLine() + 1)) {
             activeDialogues.remove(player.getUniqueId());
@@ -246,16 +285,19 @@ public class DialogueManager {
         String dialogueId = activeDialogue.getDialogueId();
         int currentLine = activeDialogue.getCurrentLine();
 
-        Map<Integer, String> lines = dialogues.get(dialogueId);
-        String lineText = lines.get(currentLine);
+        Map<Integer, LocalizedLine> lines = dialogues.get(dialogueId);
+        LocalizedLine localizedLine = lines.get(currentLine);
 
-        if (lineText == null) {
+        if (localizedLine == null) {
             plugin.getLogger().warning("Line " + currentLine + " not found in dialogue " + dialogueId);
             activeDialogues.remove(player.getUniqueId());
             plugin.getConfigManager().setPlayerDialogueProgress(player.getUniqueId().toString(), dialogueId, 1);
             saveDialogueProgress();
             return;
         }
+
+        LocaleManager.SupportedLocale playerLocale = plugin.getLocaleManager().getPlayerLocale(player);
+        String lineText = localizedLine.getText(playerLocale);
 
         activeDialogue.setLineCompleted(false);
 
@@ -423,7 +465,50 @@ public class DialogueManager {
         if (typingTask != null) {
             typingTask.cancel();
         }
+        
+        // Remove instruction bossbar when ending dialogue
+        BossBar instructionBar = instructionBossBars.remove(player.getUniqueId());
+        if (instructionBar != null) {
+            player.hideBossBar(instructionBar);
+        }
+        
         player.sendActionBar(Component.empty());
+    }
+
+    private void showInstructionBossBar(Player player) {
+        LocaleManager.SupportedLocale playerLocale = plugin.getLocaleManager().getPlayerLocale(player);
+        String instructionText = plugin.getConfigManager().getInstructionBossbar(playerLocale);
+        Component instructionComponent = plugin.getMiniMessage().deserialize(instructionText);
+        
+        BossBar bossBar = BossBar.bossBar(
+            instructionComponent,
+            1.0f,
+            BossBar.Color.YELLOW,
+            BossBar.Overlay.PROGRESS
+        );
+        
+        instructionBossBars.put(player.getUniqueId(), bossBar);
+        player.showBossBar(bossBar);
+        
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            BossBar currentBar = instructionBossBars.remove(player.getUniqueId());
+            if (currentBar != null && currentBar.equals(bossBar)) {
+                player.hideBossBar(bossBar);
+            }
+        }, 100L); // 5 seconds
+    }
+
+    public boolean hasPlayerCompletedDialogue(String playerUUID, String dialogueId) {
+        Map<Integer, LocalizedLine> lines = dialogues.get(dialogueId);
+        if (lines == null || lines.isEmpty()) {
+            return false;
+        }
+
+        int lastLine = lines.keySet().stream().mapToInt(Integer::intValue).max().orElse(0);
+        
+        int progress = plugin.getConfigManager().getPlayerDialogueProgress(playerUUID, dialogueId);
+        
+        return progress > lastLine;
     }
 
     @Getter
@@ -439,6 +524,21 @@ public class DialogueManager {
             this.npc = npc;
             this.currentLine = currentLine;
             this.lineCompleted = false;
+        }
+    }
+
+    @Getter
+    public static class LocalizedLine {
+        private final String ukrainianText;
+        private final String englishText;
+
+        public LocalizedLine(String ukrainianText, String englishText) {
+            this.ukrainianText = ukrainianText;
+            this.englishText = englishText;
+        }
+
+        public String getText(LocaleManager.SupportedLocale locale) {
+            return locale == LocaleManager.SupportedLocale.UKRAINIAN ? ukrainianText : englishText;
         }
     }
 }

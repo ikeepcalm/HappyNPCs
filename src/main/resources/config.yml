@@ -16,5 +16,10 @@ typing-sound: "ui.button.click"
 # Default: 2 (10 characters per second)
 typing-speed: 1
 
+# Instruction messages shown on first dialogue interaction
+instruction-bossbar:
+  uk: "<yellow>Натисни F щоб продовжити діалог</yellow>"
+  en: "<yellow>Press F to continue dialogue</yellow>"
+
 # Debug mode
 debug: false

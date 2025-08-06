@@ -44,7 +44,6 @@ public class NPCManager {
                 ConfigurationSection npcSection = npcsSection.getConfigurationSection(npcId);
                 if (npcSection == null) continue;
 
-                // Load location
                 String worldName = npcSection.getString("location.world");
                 double x = npcSection.getDouble("location.x");
                 double y = npcSection.getDouble("location.y");
@@ -92,7 +91,6 @@ public class NPCManager {
                 }
 
                 if (npcSection.getBoolean("spawned", true)) {
-                    // Use sync task to spawn NPCs to ensure they're on main thread
                     Bukkit.getScheduler().runTask(plugin, npc::spawn);
                 }
 
@@ -133,7 +131,6 @@ public class NPCManager {
             npcSection.set("dialogueId", npc.getDialogueId());
             npcSection.set("spawned", npc.isSpawned());
 
-            // Save entity UUID
             if (npc.getEntityUUID() != null) {
                 npcSection.set("entityUUID", npc.getEntityUUID().toString());
             }
@@ -156,7 +153,6 @@ public class NPCManager {
                         String npcId = container.get(new NamespacedKey(plugin, "HappyNPC"), PersistentDataType.STRING);
                         HappyNPC npc = npcs.get(npcId);
 
-                        // If NPC exists and this isn't its current entity, it's a duplicate
                         if (npc != null) {
                             if (npc.getEntity() != null && !npc.getEntity().equals(entity)) {
                                 plugin.getLogger().info("Removing duplicate NPC entity for " + npcId);

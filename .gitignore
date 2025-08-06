@@ -1,4 +1,7 @@
 /.gradle
 /.idea
 /build
+gradle
 /run
+
+.claude

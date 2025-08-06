@@ -3,6 +3,7 @@ package dev.ua.ikeepcalm.happyNPCs;
 import dev.ua.ikeepcalm.happyNPCs.command.CommandManager;
 import dev.ua.ikeepcalm.happyNPCs.config.ConfigManager;
 import dev.ua.ikeepcalm.happyNPCs.listener.*;
+import dev.ua.ikeepcalm.happyNPCs.locale.LocaleManager;
 import dev.ua.ikeepcalm.happyNPCs.manager.DialogueManager;
 import dev.ua.ikeepcalm.happyNPCs.manager.NPCManager;
 import dev.ua.ikeepcalm.happyNPCs.npc.HappyNPC;
@@ -29,6 +30,7 @@ public class HappyNPCs extends JavaPlugin {
     private CommandManager commandManager;
     private FileWatcher fileWatcher;
     private MiniMessage miniMessage;
+    private LocaleManager localeManager;
 
     private boolean modelEngineAvailable;
     private boolean mythicMobsAvailable;
@@ -42,6 +44,7 @@ public class HappyNPCs extends JavaPlugin {
         saveDefaultConfig();
 
         configManager = new ConfigManager(this);
+        localeManager = new LocaleManager(this);
         npcManager = new NPCManager(this);
         dialogueManager = new DialogueManager(this);
         commandManager = new CommandManager(this);
@@ -52,6 +55,7 @@ public class HappyNPCs extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new NPCMovementProtectionListener(this), this);
         getServer().getPluginManager().registerEvents(new NPCCleanupListener(this), this);
         getServer().getPluginManager().registerEvents(new MythicMobsInitListener(this), this);
+        getServer().getPluginManager().registerEvents(new PlayerLocaleListener(this), this);
 
         commandManager.registerCommands();
         fileWatcher = new FileWatcher(this);
